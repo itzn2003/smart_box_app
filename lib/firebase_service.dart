@@ -84,7 +84,7 @@ class FirebaseService {
     return List.generate(4, (_) => random.nextInt(10)).join();
   }
   
-  // Modified sendPinToRequest method that prioritizes RTDB
+  // Modified sendPinToRequest method
   Future<void> sendPinToRequest(String requestId, String pin) async {
     try {
       print('Starting PIN request update for $requestId with PIN: $pin');
@@ -103,9 +103,7 @@ class FirebaseService {
         await _database.ref('pin_requests/$requestId').update(rtdbUpdateData);
         print('RTDB update successful');
       } catch (rtdbError) {
-        print('RTDB update failed: $rtdbError');
-        // Continue to try Firestore
-      }
+        print('RTDB update failed: $rtdbError');      }
     } catch (e) {
       print('Error in sendPinToRequest: $e');
       rethrow;
@@ -117,7 +115,7 @@ class FirebaseService {
     try {
       print('Completing request: $requestId');
       
-      // Update Realtime Database first (prioritize it)
+      // Update Realtime Database
       bool rtdbSuccess = false;
       try {
         await _database.ref('pin_requests/$requestId').update({
@@ -128,9 +126,8 @@ class FirebaseService {
         rtdbSuccess = true;
       } catch (e) {
         print('Error updating RTDB completion status: $e');
-        // Continue to try Firestore even if RTDB fails
       }
-        // If RTDB failed and Firestore also failed, throw an error
+        // If RTDB failed throw an error
         if (!rtdbSuccess) {
           throw Exception('Failed to complete request in both databases');
         }
@@ -142,9 +139,6 @@ class FirebaseService {
   }
   
   // Listen for PIN verification status changes for a specific request
-  Stream<DocumentSnapshot> getPinRequestStatus(String requestId) {
-    return _firestore.collection('pin_requests').doc(requestId).snapshots();
-  }
   Stream<DatabaseEvent> getPinRequestStatusFromRTDB(String requestId) {
     return _database.ref('pin_requests/$requestId').onValue;
   }
@@ -161,7 +155,6 @@ class FirebaseService {
         print('RTDB pinVerified update completed');
       } catch (e) {
         print('Error updating RTDB verification status: $e');
-        // Continue to try Firestore even if RTDB fails
       }
     } catch (e) {
       print('Error in markPinVerified: $e');
@@ -182,27 +175,6 @@ class FirebaseService {
       }
     }, onError: (error) {
       print('Error in RTDB listener: $error');
-    });
-    
-    // Listen to Firestore changes
-    _firestore.collection('pin_requests').doc(requestId).snapshots().listen((docSnapshot) {
-      if (docSnapshot.exists) {
-        final data = docSnapshot.data();
-        if (data != null && data['pinVerified'] == true) {
-          print('Firestore: PIN verified status detected for $requestId');
-          // Update RTDB to match
-          _database.ref('pin_requests/$requestId').update({
-            'pinVerified': true,
-            'verifiedAt': ServerValue.timestamp,
-          }).then((_) {
-            print('Synced PIN verified status to RTDB');
-          }).catchError((error) {
-            print('Error syncing to RTDB: $error');
-          });
-        }
-      }
-    }, onError: (error) {
-      print('Error in Firestore listener: $error');
     });
   }
 }
